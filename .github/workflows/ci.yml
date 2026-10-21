@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: pytest (Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        # 只装测试所需依赖：gm SDK 体积大且测试已用 mock 替换，
+        # 因此 CI 不安装它，只验证本项目的纯逻辑部分。
+        run: |
+          python -m pip install --upgrade pip
+          pip install "mcp>=1.2,<2" pytest pytest-asyncio numpy pandas
+
+      - name: Run tests
+        run: pytest -q
+
+      - name: Import smoke check
+        shell: bash
+        run: |
+          python -c "
+          import sys; sys.path.insert(0, 'src')
+          from myquant_mcp.client import normalize_symbol
+          from myquant_mcp.serialize import to_jsonable
+          assert normalize_symbol('600000') == 'SHSE.600000'
+          assert normalize_symbol('sh600000') == 'SHSE.600000'
+          assert normalize_symbol('600000.SH') == 'SHSE.600000'
+          print('import + normalize smoke check OK')
+          "
